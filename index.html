@@ -24,5 +24,29 @@
   <button id="generate">Generate QR Code</button>
 
   <div id="qr"></div>
+    <script>
+    // Find the dropdown and the four groups of fields
+    const typeSelect = document.getElementById("type");
+    const groups = {
+      link: document.getElementById("link-fields"),
+      text: document.getElementById("text-fields"),
+      whatsapp: document.getElementById("whatsapp-fields"),
+      upi: document.getElementById("upi-fields")
+    };
+
+    // Show only the group that matches the dropdown
+    function showSelectedFields() {
+      const selected = typeSelect.value;
+      for (const name in groups) {
+        groups[name].hidden = (name !== selected);
+      }
+    }
+
+    // Run the function whenever the dropdown changes
+    typeSelect.addEventListener("change", showSelectedFields);
+
+    // Run it once when the page loads
+    showSelectedFields();
+  </script>
 </body>
 </html>
