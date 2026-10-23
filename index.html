@@ -6,7 +6,23 @@
   <title>My QR Code Generator</title>
 </head>
 <body>
-  <h1>My QR Code Generator</h1>
-  <p>Coming soon!</p>
+  <h1>QR Code Generator</h1>
+
+  <label for="type">What is the QR code for?</label>
+  <select id="type">
+    <option value="link">Link</option>
+    <option value="text">Text</option>
+  </select>
+
+  <br><br>
+
+  <label for="input">Enter your link or text:</label>
+  <input type="text" id="input" placeholder="https://example.com">
+
+  <br><br>
+
+  <button id="generate">Generate QR Code</button>
+
+  <div id="qr"></div>
 </body>
 </html>
