@@ -3,30 +3,148 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>My QR Code Generator</title>
+  <title>QR Code Generator</title>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: Arial, sans-serif;
+      background: #f3f4f6;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .card {
+      background: #ffffff;
+      width: 100%;
+      max-width: 420px;
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+
+    h1 { font-size: 22px; text-align: center; margin-top: 0; }
+
+    label {
+      display: block;
+      font-weight: bold;
+      font-size: 14px;
+      margin: 14px 0 6px;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #cccccc;
+      border-radius: 8px;
+      font-size: 16px;
+    }
+
+    textarea { height: 90px; resize: vertical; }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      margin-top: 18px;
+      border: none;
+      border-radius: 8px;
+      background: #2563eb;
+      color: #ffffff;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    button:hover { background: #1d4ed8; }
+
+    #download-btn { background: #16a34a; display: none; }
+    #download-btn:hover { background: #15803d; }
+
+    #error {
+      color: #dc2626;
+      font-size: 14px;
+      margin-top: 10px;
+      min-height: 18px;
+    }
+
+    #qr-code {
+      display: flex;
+      justify-content: center;
+      margin-top: 20px;
+    }
+
+    .note {
+      font-size: 12px;
+      color: #6b7280;
+      text-align: center;
+      margin-top: 20px;
+    }
+  </style>
 </head>
+
 <body>
-  <h1>QR Code Generator</h1>
+  <div class="card">
+    <h1>QR Code Generator</h1>
 
-  <label for="type">What is the QR code for?</label>
-  <select id="type">
-    <option value="link">Link</option>
-    <option value="text">Text</option>
-  </select>
+    <label for="type">What do you want to turn into a QR code?</label>
+    <select id="type">
+      <option value="link">Link</option>
+      <option value="text">Text</option>
+      <option value="whatsapp">WhatsApp chat</option>
+      <option value="upi">UPI payment</option>
+    </select>
 
-  <br><br>
+    <div id="link-fields">
+      <label for="link-input">Link</label>
+      <input type="url" id="link-input" placeholder="https://example.com">
+    </div>
 
-  <label for="input">Enter your link or text:</label>
-  <input type="text" id="input" placeholder="https://example.com">
+    <div id="text-fields">
+      <label for="text-input">Text</label>
+      <textarea id="text-input" placeholder="Type anything"></textarea>
+    </div>
 
-  <br><br>
+    <div id="whatsapp-fields">
+      <label for="wa-number">WhatsApp number (country code + number, digits only)</label>
+      <input type="tel" id="wa-number" placeholder="919876543210">
+      <label for="wa-message">Message (optional)</label>
+      <input type="text" id="wa-message" placeholder="Hello!">
+    </div>
 
-  <button id="generate">Generate QR Code</button>
+    <div id="upi-fields">
+      <label for="upi-id">UPI ID</label>
+      <input type="text" id="upi-id" placeholder="name@bank">
+      <label for="upi-name">Payee name</label>
+      <input type="text" id="upi-name" placeholder="Your name or shop name">
+      <label for="upi-amount">Amount in ₹ (optional)</label>
+      <input type="number" id="upi-amount" placeholder="100">
+      <label for="upi-note">Note (optional)</label>
+      <input type="text" id="upi-note" placeholder="Payment for...">
+    </div>
 
-  <div id="qr"></div>
-    <script>
-    // Find the dropdown and the four groups of fields
+    <button id="generate-btn">Generate QR Code</button>
+    <div id="error"></div>
+
+    <div id="qr-code"></div>
+    <button id="download-btn">Download QR Code (PNG)</button>
+
+    <p class="note">Everything runs in your browser. Nothing you type is sent anywhere.</p>
+  </div>
+
+  <!-- QR library (made by someone else) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <!-- Our own code -->
+  <script>
+    // ---------- Find the things on the page ----------
     const typeSelect = document.getElementById("type");
+    const generateBtn = document.getElementById("generate-btn");
+    const downloadBtn = document.getElementById("download-btn");
+    const errorBox = document.getElementById("error");
+    const qrBox = document.getElementById("qr-code");
+
     const groups = {
       link: document.getElementById("link-fields"),
       text: document.getElementById("text-fields"),
@@ -34,19 +152,127 @@
       upi: document.getElementById("upi-fields")
     };
 
-    // Show only the group that matches the dropdown
+    // ---------- Show only the boxes for the chosen type ----------
     function showSelectedFields() {
       const selected = typeSelect.value;
       for (const name in groups) {
         groups[name].hidden = (name !== selected);
       }
+      // Clear any old result when the type changes
+      errorBox.textContent = "";
+      qrBox.innerHTML = "";
+      downloadBtn.style.display = "none";
     }
 
-    // Run the function whenever the dropdown changes
-    typeSelect.addEventListener("change", showSelectedFields);
+    // ---------- Show an error message and return null ----------
+    function showError(message) {
+      errorBox.textContent = message;
+      return null;
+    }
 
-    // Run it once when the page loads
-    showSelectedFields();
+    // ---------- Build the text that goes inside the QR code ----------
+    function getQRText() {
+      const type = typeSelect.value;
+
+      if (type === "link") {
+        const link = document.getElementById("link-input").value.trim();
+        if (link === "") return showError("Please type a link.");
+        if (!link.startsWith("http://") && !link.startsWith("https://")) {
+          return showError("The link must start with http:// or https://");
+        }
+        return link;
+      }
+
+      if (type === "text") {
+        const text = document.getElementById("text-input").value.trim();
+        if (text === "") return showError("Please type some text.");
+        return text;
+      }
+
+      if (type === "whatsapp") {
+        const number = document.getElementById("wa-number").value.trim();
+        const message = document.getElementById("wa-message").value.trim();
+        if (!/^\d{10,15}$/.test(number)) {
+          return showError("Enter the number with country code, digits only (like 919876543210).");
+        }
+        let url = "https://wa.me/" + number;
+        if (message !== "") url += "?text=" + encodeURIComponent(message);
+        return url;
+      }
+
+      if (type === "upi") {
+        const upiId = document.getElementById("upi-id").value.trim();
+        const name = document.getElementById("upi-name").value.trim();
+        const amount = document.getElementById("upi-amount").value.trim();
+        const note = document.getElementById("upi-note").value.trim();
+
+        if (!/^[\w.\-]+@[\w.\-]+$/.test(upiId)) {
+          return showError("Enter a valid UPI ID, like name@bank.");
+        }
+        if (name === "") return showError("Please enter the payee name.");
+
+        let upi = "upi://pay?pa=" + upiId + "&pn=" + encodeURIComponent(name) + "&cu=INR";
+
+        if (amount !== "") {
+          if (Number(amount) <= 0) return showError("Amount must be more than 0.");
+          upi += "&am=" + amount;
+        }
+        if (note !== "") upi += "&tn=" + encodeURIComponent(note);
+        return upi;
+      }
+    }
+
+    // ---------- Make the QR code ----------
+    function generateQR() {
+      errorBox.textContent = "";
+      const qrText = getQRText();
+
+      if (qrText === null) {
+        qrBox.innerHTML = "";
+        downloadBtn.style.display = "none";
+        return;
+      }
+
+      qrBox.innerHTML = "";  // remove the old QR code
+      new QRCode(qrBox, { text: qrText, width: 240, height: 240 });
+      downloadBtn.style.display = "block";
+    }
+
+    // ---------- Download the QR code as a PNG ----------
+    function downloadQR() {
+      const canvas = qrBox.querySelector("canvas");
+      const img = qrBox.querySelector("img");
+      let dataUrl = "";
+
+      if (canvas) {
+        // Add a white border so phone cameras can scan the saved image easily
+        const border = 20;
+        const out = document.createElement("canvas");
+        out.width = canvas.width + border * 2;
+        out.height = canvas.height + border * 2;
+        const ctx = out.getContext("2d");
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, out.width, out.height);
+        ctx.drawImage(canvas, border, border);
+        dataUrl = out.toDataURL("image/png");
+      } else if (img) {
+        dataUrl = img.src;
+      }
+
+      if (dataUrl === "") return;
+
+      const link = document.createElement("a");
+      link.href = dataUrl;
+      link.download = "qr-code.png";
+      link.click();
+    }
+
+    // ---------- Connect everything ----------
+    typeSelect.addEventListener("change", showSelectedFields);
+    generateBtn.addEventListener("click", generateQR);
+    downloadBtn.addEventListener("click", downloadQR);
+
+    showSelectedFields();  // set up the page when it first loads
   </script>
 </body>
 </html>
